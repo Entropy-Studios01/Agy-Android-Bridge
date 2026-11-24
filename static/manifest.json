@@ -1,0 +1,18 @@
+{
+  "name": "AGY Remote",
+  "short_name": "AGY Remote",
+  "description": "Remote Android control for your PC agy PowerShell terminal",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0f17",
+  "theme_color": "#0b0f17",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/static/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

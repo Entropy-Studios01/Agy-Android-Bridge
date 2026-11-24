@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0f17" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>AGY Remote — PC Sessions & Terminal</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css" />
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --surface: #131a26;
+      --surface-2: #1c2638;
+      --surface-hover: #233148;
+      --border: #26344d;
+      --text: #e6edf7;
+      --muted: #8ea0b8;
+      --accent: #38bdf8;
+      --accent-dark: #0284c7;
+      --green: #22c55e;
+      --green-glow: rgba(34, 197, 94, 0.35);
+      --amber: #f59e0b;
+      --red: #ef4444;
+      --card-bg: #111722;
+      --card-border: #1f2b3e;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+    }
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      height: 100dvh;
+      width: 100%;
+    }
+
+    /* Primary Nav Tabs */
+    .nav-tabs {
+      display: flex;
+      background: #090d14;
+      border-bottom: 1px solid var(--border);
+      padding: 6px 8px 0;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .tab-btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 9px 12px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+      background: transparent;
+      border: 1px solid transparent;
+      border-bottom: none;
+      border-radius: 8px 8px 0 0;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .tab-btn.active {
+      color: var(--text);
+      background: var(--surface);
+      border-color: var(--border);
+      border-bottom: 2px solid var(--accent);
+    }
+    .badge {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      color: var(--accent);
+    }
+    .badge.running {
+      background: #14532d;
+      color: #86efac;
+    }
+
+    /* Tab Contents */
+    .tab-content {
+      flex: 1;
+      min-height: 0;
+      display: none;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    .tab-content.active {
+      display: flex;
+    }
+
+    /* PC Sessions View */
+    .sessions-view {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .sessions-toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .search-input {
+      flex: 1;
+      min-width: 140px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 8px 12px;
+      font-size: 13px;
+      outline: none;
+    }
+    .search-input:focus { border-color: var(--accent); }
+    .filter-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .filter-btn.active {
+      background: var(--surface-2);
+      color: var(--text);
+      border-color: var(--accent);
+    }
+    .btn-new-pc {
+      background: var(--accent);
+      color: #031525;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* Session Cards */
+    .session-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      transition: border-color 0.15s ease;
+    }
+    .session-card.running {
+      border-color: rgba(34, 197, 94, 0.4);
+      background: #0f1a1d;
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+    }
+    .status-tag {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .status-tag.running {
+      background: rgba(34, 197, 94, 0.2);
+      color: #4ade80;
+      box-shadow: 0 0 6px var(--green-glow);
+    }
+    .status-tag.idle {
+      background: var(--surface-2);
+      color: var(--muted);
+    }
+    .card-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .meta-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .card-workspace {
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 11px;
+      color: #93c5fd;
+      background: rgba(14, 165, 233, 0.08);
+      padding: 4px 6px;
+      border-radius: 6px;
+      word-break: break-all;
+    }
+    .card-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .btn-action {
+      flex: 1;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+    }
+    .btn-action.primary {
+      background: var(--accent);
+      color: #031525;
+      border-color: var(--accent);
+      font-weight: 700;
+    }
+    .btn-action:active { transform: scale(0.97); }
+
+    /* Topbar for Terminal Tab */
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      white-space: nowrap;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--red);
+    }
+    .dot.active { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .dot.idle { background: var(--amber); }
+    .session-select {
+      flex: 1;
+      min-width: 0;
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 8px;
+      font-size: 13px;
+      outline: none;
+    }
+    .icon-btn {
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .icon-btn:active { background: var(--border); }
+
+    /* Terminal Wrap */
+    .terminal-wrap {
+      flex: 1;
+      min-height: 0;
+      width: 100%;
+      padding: 6px 6px 2px;
+      background: var(--bg);
+      position: relative;
+      overflow: hidden;
+    }
+    #terminal {
+      width: 100%;
+      height: 100%;
+    }
+    #fallback-term {
+      display: none;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 8px;
+      overflow-y: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #dbeafe;
+    }
+
+    /* Quick Action Keys */
+    .quick-bar {
+      display: flex;
+      gap: 6px;
+      padding: 6px 8px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      overflow-x: auto;
+      flex-shrink: 0;
+      scrollbar-width: none;
+    }
+    .quick-bar::-webkit-scrollbar { display: none; }
+    .qbtn {
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 11px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: ui-monospace, monospace;
+      white-space: nowrap;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+    .qbtn.danger { color: #fca5a5; border-color: #7f1d1d; background: #2a1215; }
+    .qbtn:active { transform: scale(0.96); }
+
+    /* Prompt Composer */
+    .composer {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    #prompt-input {
+      flex: 1;
+      min-height: 42px;
+      max-height: 110px;
+      resize: none;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 15px;
+      font-family: inherit;
+      line-height: 1.35;
+      outline: none;
+    }
+    #prompt-input:focus { border-color: var(--accent); }
+    #send-btn {
+      background: var(--accent);
+      color: #031525;
+      border: none;
+      border-radius: 12px;
+      padding: 11px 16px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    #send-btn:active { background: var(--accent-dark); color: #fff; }
+
+    /* Transcript Drawer / Modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(5, 9, 16, 0.88);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 50;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      width: 100%;
+      max-width: 480px;
+      max-height: 85vh;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-2);
+    }
+    .modal-header h2 { margin: 0; font-size: 16px; }
+    .btn-close {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-size: 20px;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .modal-body {
+      padding: 14px 16px;
+      overflow-y: auto;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .turn-bubble {
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      line-height: 1.45;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+    .turn-bubble.user {
+      background: #1e293b;
+      border-left: 3px solid var(--accent);
+      align-self: flex-start;
+      width: 100%;
+    }
+    .turn-bubble.assistant {
+      background: #0f172a;
+      border-left: 3px solid var(--green);
+      align-self: flex-start;
+      width: 100%;
+    }
+    .turn-meta {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      margin-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .modal-footer {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+      background: var(--surface);
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Main Top Tabs -->
+    <nav class="nav-tabs">
+      <button class="tab-btn active" id="tab-btn-sessions">
+        <span>📊 PC Sessions</span>
+        <span class="badge" id="badge-running">0 Active</span>
+      </button>
+      <button class="tab-btn" id="tab-btn-terminal">
+        <span>⌨️ Terminal</span>
+      </button>
+    </nav>
+
+    <!-- TAB 1: PC Sessions Tracker -->
+    <div class="tab-content active" id="tab-content-sessions">
+      <div class="sessions-view">
+        <div class="sessions-toolbar">
+          <input type="text" class="search-input" id="session-search" placeholder="Filter sessions or projects..." />
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="running">🟢 Running</button>
+          <button class="filter-btn" data-filter="idle">⚪ Idle</button>
+          <button class="filter-btn" id="btn-refresh-sessions" title="Refresh">🔄</button>
+        </div>
+
+        <div id="sessions-container" style="display:flex; flex-direction:column; gap:10px;">
+          <div style="text-align:center; padding:30px; color:var(--muted); font-size:14px;">Loading PC Antigravity sessions...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: Interactive Terminal -->
+    <div class="tab-content" id="tab-content-terminal">
+      <header class="topbar">
+        <div class="status-pill" id="status-pill">
+          <span class="dot" id="status-dot"></span>
+          <span id="status-text">Offline</span>
+        </div>
+        <select class="session-select" id="session-select" aria-label="PowerShell session"></select>
+        <button class="icon-btn" id="new-session-btn" title="New PowerShell tab">+</button>
+        <button class="icon-btn" id="font-down-btn" title="Smaller text">A-</button>
+        <button class="icon-btn" id="font-up-btn" title="Larger text">A+</button>
+      </header>
+
+      <main class="terminal-wrap">
+        <div id="terminal"></div>
+        <pre id="fallback-term"></pre>
+      </main>
+
+      <div class="quick-bar">
+        <button class="qbtn danger" data-seq="CTRL_C">Ctrl+C</button>
+        <button class="qbtn" data-seq="ENTER">Enter ↵</button>
+        <button class="qbtn" data-seq="YES">y ↵</button>
+        <button class="qbtn" data-seq="ESC">Esc</button>
+        <button class="qbtn" data-seq="TAB">Tab</button>
+        <button class="qbtn" data-seq="UP">↑</button>
+        <button class="qbtn" data-seq="DOWN">↓</button>
+        <button class="qbtn" id="btn-launch-agy">agy</button>
+        <button class="qbtn" id="btn-clear">Clear</button>
+      </div>
+
+      <form class="composer" id="composer-form">
+        <textarea
+          id="prompt-input"
+          rows="1"
+          placeholder="Prompt agy or run a PowerShell command..."
+          autocomplete="off"
+          autocorrect="on"
+          spellcheck="true"
+        ></textarea>
+        <button type="submit" id="send-btn">Send</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Transcript Viewer Modal -->
+  <div class="modal-backdrop" id="transcript-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="transcript-modal-title">Session Activity</h2>
+        <button class="btn-close" id="btn-close-transcript">&times;</button>
+      </div>
+      <div class="modal-body" id="transcript-body">
+        <div style="text-align:center; padding:20px; color:var(--muted);">Loading transcript...</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-action primary" id="btn-resume-from-transcript">⚡ Resume in Terminal</button>
+        <button class="btn-action" id="btn-close-transcript-footer">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auth Modal -->
+  <div class="modal-backdrop" id="auth-modal">
+    <div class="modal" style="max-width:340px;">
+      <div class="modal-header">
+        <h2>Connect to PC</h2>
+      </div>
+      <div class="modal-body">
+        <p style="margin:0 0 12px; font-size:13px; color:var(--muted);">Paste the auth token printed in your PC terminal.</p>
+        <input type="password" id="token-input" placeholder="Auth token" style="width:100%; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:10px; padding:10px; font-size:14px; outline:none;" />
+      </div>
+      <div class="modal-footer">
+        <button class="btn-action primary" id="save-token-btn" style="width:100%;">Connect</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+  <script>
+    (function () {
+      const TOKEN_KEY = "agy_remote_token";
+      const FONT_KEY = "agy_remote_font_size";
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("token")) {
+        localStorage.setItem(TOKEN_KEY, params.get("token"));
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+
+      let authToken = localStorage.getItem(TOKEN_KEY) || "";
+      let fontSize = parseInt(localStorage.getItem(FONT_KEY) || "13", 10);
+      let ws = null;
+      let currentSessionId = null;
+      let reconnectTimer = null;
+      let pingTimer = null;
+      let sessionsPollTimer = null;
+      let cachedSessions = [];
+      let activeFilter = "all";
+      let activeInspectConvId = null;
+
+      // Elements
+      const tabBtnSessions = document.getElementById("tab-btn-sessions");
+      const tabBtnTerminal = document.getElementById("tab-btn-terminal");
+      const tabContentSessions = document.getElementById("tab-content-sessions");
+      const tabContentTerminal = document.getElementById("tab-content-terminal");
+      const badgeRunning = document.getElementById("badge-running");
+      const sessionsContainer = document.getElementById("sessions-container");
+      const sessionSearch = document.getElementById("session-search");
+
+      const statusDot = document.getElementById("status-dot");
+      const statusText = document.getElementById("status-text");
+      const sessionSelect = document.getElementById("session-select");
+      const authModal = document.getElementById("auth-modal");
+      const tokenInput = document.getElementById("token-input");
+      const promptInput = document.getElementById("prompt-input");
+      const fallbackEl = document.getElementById("fallback-term");
+
+      const transcriptModal = document.getElementById("transcript-modal");
+      const transcriptModalTitle = document.getElementById("transcript-modal-title");
+      const transcriptBody = document.getElementById("transcript-body");
+      const btnResumeFromTranscript = document.getElementById("btn-resume-from-transcript");
+
+      // Switch Tabs
+      function switchTab(target) {
+        if (target === "sessions") {
+          tabBtnSessions.classList.add("active");
+          tabBtnTerminal.classList.remove("active");
+          tabContentSessions.classList.add("active");
+          tabContentTerminal.classList.remove("active");
+          loadPCSessions();
+        } else {
+          tabBtnTerminal.classList.add("active");
+          tabBtnSessions.classList.remove("active");
+          tabContentTerminal.classList.add("active");
+          tabContentSessions.classList.remove("active");
+          sendResize();
+        }
+      }
+
+      tabBtnSessions.addEventListener("click", () => switchTab("sessions"));
+      tabBtnTerminal.addEventListener("click", () => switchTab("terminal"));
+
+      // Terminal Init
+      let term = null;
+      let fitAddon = null;
+      const useXterm = typeof window.Terminal === "function";
+
+      if (useXterm) {
+        term = new window.Terminal({
+          cursorBlink: true,
+          fontSize: fontSize,
+          fontFamily: "'Cascadia Code', 'JetBrains Mono', ui-monospace, monospace",
+          scrollback: 5000,
+          convertEol: false,
+          theme: {
+            background: "#0b0f17",
+            foreground: "#e6edf7",
+            cursor: "#38bdf8",
+            selectionBackground: "#1d4ed8",
+          },
+        });
+        if (window.FitAddon && window.FitAddon.FitAddon) {
+          fitAddon = new window.FitAddon.FitAddon();
+          term.loadAddon(fitAddon);
+        }
+        term.open(document.getElementById("terminal"));
+        if (fitAddon) fitAddon.fit();
+        term.onData((data) => sendInput(data));
+      } else {
+        document.getElementById("terminal").style.display = "none";
+        fallbackEl.style.display = "block";
+      }
+
+      function writeTerm(text) {
+        if (term) term.write(text);
+        else {
+          const clean = text.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, "");
+          fallbackEl.textContent += clean;
+          fallbackEl.scrollTop = fallbackEl.scrollHeight;
+        }
+      }
+
+      function clearTerm() {
+        if (term) term.clear();
+        else fallbackEl.textContent = "";
+      }
+
+      function setStatus(state, label) {
+        statusDot.className = "dot" + (state ? " " + state : "");
+        statusText.textContent = label;
+      }
+
+      function sendInput(data) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "input", data }));
+        }
+      }
+
+      function sendResize() {
+        if (!term || !fitAddon) return;
+        try {
+          fitAddon.fit();
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "resize", rows: term.rows, cols: term.cols }));
+          }
+        } catch (_) {}
+      }
+
+      window.addEventListener("resize", () => setTimeout(sendResize, 120));
+
+      async function apiFetch(path, options = {}) {
+        const headers = Object.assign({ "X-Auth-Token": authToken }, options.headers || {});
+        const res = await fetch(path, Object.assign({}, options, { headers }));
+        if (res.status === 401) {
+          authModal.classList.add("open");
+          throw new Error("Unauthorized");
+        }
+        return res.json();
+      }
+
+      // Load PC Antigravity Sessions
+      async function loadPCSessions() {
+        if (!authToken) return;
+        try {
+          const data = await apiFetch("/api/pc-sessions");
+          cachedSessions = data.sessions || [];
+          renderPCSessions();
+        } catch (err) {
+          console.error("Failed to load PC sessions:", err);
+        }
+      }
+
+      function renderPCSessions() {
+        const query = sessionSearch.value.toLowerCase().trim();
+        let runningCount = 0;
+
+        const filtered = cachedSessions.filter((s) => {
+          if (s.is_running) runningCount++;
+          if (activeFilter === "running" && !s.is_running) return false;
+          if (activeFilter === "idle" && s.is_running) return false;
+          if (query) {
+            const str = `${s.title} ${s.workspace_dir} ${s.conversation_id}`.toLowerCase();
+            return str.includes(query);
+          }
+          return true;
+        });
+
+        badgeRunning.textContent = `${runningCount} Active`;
+        if (runningCount > 0) {
+          badgeRunning.className = "badge running";
+        } else {
+          badgeRunning.className = "badge";
+        }
+
+        if (filtered.length === 0) {
+          sessionsContainer.innerHTML = `
+            <div style="text-align:center; padding:30px; color:var(--muted); font-size:14px;">
+              No sessions match your filter.
+            </div>`;
+          return;
+        }
+
+        sessionsContainer.innerHTML = filtered.map((s) => `
+          <div class="session-card ${s.is_running ? 'running' : ''}" data-conv-id="${s.conversation_id}">
+            <div class="card-header">
+              <span class="card-title">${escapeHtml(s.title)}</span>
+              <span class="status-tag ${s.is_running ? 'running' : 'idle'}">
+                ${s.is_running ? '● RUNNING' : '○ IDLE'}
+              </span>
+            </div>
+            ${s.workspace_dir ? `<div class="card-workspace">📁 ${escapeHtml(s.workspace_dir)}</div>` : ''}
+            <div class="card-meta">
+              <span class="meta-item">🔢 ${s.step_count} steps</span>
+              <span class="meta-item">🕒 ${formatTime(s.last_modified_time)}</span>
+            </div>
+            <div class="card-actions">
+              <button class="btn-action btn-inspect" data-id="${s.conversation_id}">📜 View Activity</button>
+              <button class="btn-action primary btn-resume" data-id="${s.conversation_id}">⚡ Resume / Attach</button>
+            </div>
+          </div>
+        `).join("");
+
+        // Attach action handlers
+        sessionsContainer.querySelectorAll(".btn-inspect").forEach((btn) => {
+          btn.addEventListener("click", () => inspectTranscript(btn.dataset.id));
+        });
+        sessionsContainer.querySelectorAll(".btn-resume").forEach((btn) => {
+          btn.addEventListener("click", () => resumePCSession(btn.dataset.id));
+        });
+      }
+
+      function escapeHtml(str) {
+        if (!str) return "";
+        return str.replace(/[&<>'"]/g, 
+          tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
+      }
+
+      function formatTime(isoStr) {
+        if (!isoStr) return "";
+        try {
+          const d = new Date(isoStr);
+          return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' ' + d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        } catch (_) {
+          return isoStr.split(".")[0];
+        }
+      }
+
+      // Filter buttons
+      document.querySelectorAll(".filter-btn[data-filter]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".filter-btn[data-filter]").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          activeFilter = btn.dataset.filter;
+          renderPCSessions();
+        });
+      });
+
+      document.getElementById("btn-refresh-sessions").addEventListener("click", () => loadPCSessions());
+      sessionSearch.addEventListener("input", () => renderPCSessions());
+
+      // Inspect Transcript
+      async function inspectTranscript(conversationId) {
+        activeInspectConvId = conversationId;
+        const target = cachedSessions.find((s) => s.conversation_id === conversationId);
+        transcriptModalTitle.textContent = target ? target.title : `Session ${conversationId.slice(0, 8)}`;
+        transcriptBody.innerHTML = '<div style="text-align:center; padding:20px; color:var(--muted);">Loading transcript...</div>';
+        transcriptModal.classList.add("open");
+
+        try {
+          const data = await apiFetch(`/api/pc-sessions/${encodeURIComponent(conversationId)}/transcript`);
+          const turns = data.turns || [];
+          if (turns.length === 0) {
+            transcriptBody.innerHTML = '<div style="text-align:center; padding:20px; color:var(--muted);">No transcript messages recorded yet.</div>';
+            return;
+          }
+
+          transcriptBody.innerHTML = turns.map((t) => `
+            <div class="turn-bubble ${t.role === 'user' ? 'user' : 'assistant'}">
+              <div class="turn-meta">
+                <span>${t.role.toUpperCase()}</span>
+                <span>${t.timestamp ? formatTime(t.timestamp) : ''}</span>
+              </div>
+              <div>${escapeHtml(t.message)}</div>
+            </div>
+          `).join("");
+          transcriptBody.scrollTop = transcriptBody.scrollHeight;
+        } catch (err) {
+          transcriptBody.innerHTML = `<div style="color:var(--red); padding:10px;">Failed to load transcript: ${err.message}</div>`;
+        }
+      }
+
+      document.getElementById("btn-close-transcript").addEventListener("click", () => transcriptModal.classList.remove("open"));
+      document.getElementById("btn-close-transcript-footer").addEventListener("click", () => transcriptModal.classList.remove("open"));
+
+      btnResumeFromTranscript.addEventListener("click", () => {
+        if (activeInspectConvId) {
+          transcriptModal.classList.remove("open");
+          resumePCSession(activeInspectConvId);
+        }
+      });
+
+      // Resume PC Session into Interactive Terminal
+      async function resumePCSession(conversationId) {
+        try {
+          const res = await apiFetch(`/api/pc-sessions/${encodeURIComponent(conversationId)}/resume`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          });
+          const createdSid = res.session.id;
+          switchTab("terminal");
+          await loadTerminalTabs(createdSid);
+        } catch (err) {
+          alert("Error resuming session: " + err.message);
+        }
+      }
+
+      // Terminal Session Management
+      async function loadTerminalTabs(preferredId) {
+        try {
+          const data = await apiFetch("/api/sessions");
+          const list = data.sessions || [];
+          sessionSelect.innerHTML = "";
+          list.forEach((s) => {
+            const opt = document.createElement("option");
+            opt.value = s.id;
+            opt.textContent = `${s.name} (${s.alive ? s.status : "stopped"})`;
+            sessionSelect.appendChild(opt);
+          });
+          if (list.length === 0) {
+            const created = await apiFetch("/api/sessions", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name: "agy-main" }),
+            });
+            return loadTerminalTabs(created.session.id);
+          }
+          const targetId = preferredId && list.some((s) => s.id === preferredId)
+            ? preferredId
+            : (currentSessionId && list.some((s) => s.id === currentSessionId) ? currentSessionId : list[0].id);
+          sessionSelect.value = targetId;
+          if (targetId !== currentSessionId || !ws || ws.readyState !== WebSocket.OPEN) {
+            connectSession(targetId);
+          }
+        } catch (err) {
+          if (err.message !== "Unauthorized") {
+            setStatus("", "Offline");
+          }
+        }
+      }
+
+      function connectSession(sessionId) {
+        currentSessionId = sessionId;
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        if (pingTimer) clearInterval(pingTimer);
+        if (ws) {
+          try { ws.onclose = null; ws.close(); } catch (_) {}
+        }
+
+        clearTerm();
+        setStatus("idle", "Connecting...");
+
+        const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const url = `${proto}//${window.location.host}/ws/${encodeURIComponent(sessionId)}?token=${encodeURIComponent(authToken)}`;
+        ws = new WebSocket(url);
+
+        ws.onopen = () => {
+          setStatus("idle", "Connected");
+          sendResize();
+          pingTimer = setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: "ping" }));
+            }
+          }, 5000);
+        };
+
+        ws.onmessage = (event) => {
+          let msg;
+          try { msg = JSON.parse(event.data); } catch (_) { return; }
+          if (msg.type === "history" || msg.type === "output") {
+            writeTerm(msg.data || "");
+            if (msg.type === "output") setStatus("active", "Active");
+          } else if (msg.type === "status" || msg.type === "pong") {
+            if (!msg.alive) setStatus("", "Stopped");
+            else if (msg.status === "active") setStatus("active", "Active");
+            else setStatus("idle", "Idle");
+          }
+        };
+
+        ws.onclose = (ev) => {
+          if (pingTimer) clearInterval(pingTimer);
+          if (ev.code === 4401) {
+            setStatus("", "Auth failed");
+            authModal.classList.add("open");
+            return;
+          }
+          setStatus("", "Reconnecting...");
+          reconnectTimer = setTimeout(() => connectSession(currentSessionId), 2500);
+        };
+      }
+
+      sessionSelect.addEventListener("change", () => {
+        if (sessionSelect.value) connectSession(sessionSelect.value);
+      });
+
+      document.getElementById("new-session-btn").addEventListener("click", async () => {
+        const name = prompt("Name for new PowerShell tab (optional):", "agy-2");
+        if (name === null) return;
+        const data = await apiFetch("/api/sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: name.trim() || undefined }),
+        });
+        await loadTerminalTabs(data.session.id);
+      });
+
+      function updateFont(delta) {
+        fontSize = Math.max(9, Math.min(22, fontSize + delta));
+        localStorage.setItem(FONT_KEY, String(fontSize));
+        if (term) {
+          term.options.fontSize = fontSize;
+          sendResize();
+        } else {
+          fallbackEl.style.fontSize = fontSize + "px";
+        }
+      }
+      document.getElementById("font-down-btn").addEventListener("click", () => updateFont(-1));
+      document.getElementById("font-up-btn").addEventListener("click", () => updateFont(1));
+
+      const SEQ_MAP = {
+        CTRL_C: "\x03",
+        ENTER: "\r",
+        YES: "y\r",
+        ESC: "\x1b",
+        TAB: "\t",
+        UP: "\x1b[A",
+        DOWN: "\x1b[B",
+      };
+      document.querySelectorAll(".qbtn[data-seq]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const seq = SEQ_MAP[btn.dataset.seq];
+          if (seq) sendInput(seq);
+        });
+      });
+
+      document.getElementById("btn-launch-agy").addEventListener("click", () => {
+        sendInput("agy\r");
+      });
+      document.getElementById("btn-clear").addEventListener("click", () => {
+        clearTerm();
+      });
+
+      promptInput.addEventListener("input", () => {
+        promptInput.style.height = "auto";
+        promptInput.style.height = Math.min(promptInput.scrollHeight, 110) + "px";
+      });
+
+      document.getElementById("composer-form").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const text = promptInput.value;
+        if (!text.trim()) {
+          sendInput("\r");
+        } else {
+          sendInput(text.replace(/\r?\n/g, " ") + "\r");
+        }
+        promptInput.value = "";
+        promptInput.style.height = "auto";
+      });
+
+      document.getElementById("save-token-btn").addEventListener("click", () => {
+        const val = tokenInput.value.trim();
+        if (!val) return;
+        authToken = val;
+        localStorage.setItem(TOKEN_KEY, authToken);
+        authModal.classList.remove("open");
+        loadPCSessions();
+        loadTerminalTabs();
+      });
+
+      if (!authToken) {
+        authModal.classList.add("open");
+      } else {
+        loadPCSessions();
+        loadTerminalTabs();
+        // Poll sessions every 6 seconds to show live updates
+        sessionsPollTimer = setInterval(() => {
+          if (tabContentSessions.classList.contains("active")) {
+            loadPCSessions();
+          }
+        }, 6000);
+      }
+    })();
+  </script>
+</body>
+</html>

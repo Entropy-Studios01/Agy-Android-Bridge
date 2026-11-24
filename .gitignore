@@ -1,0 +1,17 @@
+# Environment & secrets
+.agy_remote_token
+.env
+.venv/
+venv/
+ENV/
+
+# Python cache & tests
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# OS artifacts
+Thumbs.db
+Desktop.ini
+.DS_Store
